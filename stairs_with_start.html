@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>欣儀下樓梯</title>
+    <style>
+        body {
+            background-color: #222;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: sans-serif;
+        }
+        canvas {
+            border: 2px solid #fff;
+            background-color: #111;
+            margin-top: 10px;
+        }
+        .controls {
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        input[type="file"] {
+            background: #444;
+            color: #fff;
+            padding: 5px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+        }
+        /* 開始與重新開始按鈕樣式 */
+        #startBtn {
+            background-color: #00FFCC;
+            color: #111;
+            border: none;
+            padding: 10px 25px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: 0.2s;
+        }
+        #startBtn:hover {
+            background-color: #00cc99;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <h2>欣儀下樓梯</h2>
+    <div class="controls">
+        <label for="avatarInput">上傳自定義頭貼：</label>
+        <input type="file" id="avatarInput" accept="image/*">
+        <p style="margin: 5px 0; font-size: 14px; color: #ccc;">使用方向鍵「左 ◄」與「右 ►」控制移動</p>
+    </div>
+    
+    <button id="startBtn">開始遊戲 (或按空白鍵)</button>
+    <canvas id="gameCanvas" width="400" height="500"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const avatarInput = document.getElementById("avatarInput");
+        const startBtn = document.getElementById("startBtn");
+
+        // 遊戲狀態控制：'NOT_STARTED', 'PLAYING', 'GAME_OVER'
+        let gameState = 'NOT_STARTED'; 
+
+        let avatarImg = null;
+        let score = 0;
+        let player = {};
+        let stairs = [];
+        const stairWidth = 70;
+        const stairHeight = 10;
+        let keys = { ArrowLeft: false, ArrowRight: false };
+
+        // 監聽圖片上傳
+        avatarInput.addEventListener("change", function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() { avatarImg = img; };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 監聽鍵盤事件
+        window.addEventListener("keydown", e => {
+            if (keys.hasOwnProperty(e.code)) keys[e.code] = true;
+            // 點擊空白鍵也可以觸發開始/重玩
+            if (e.code === "Space" && (gameState === 'NOT_STARTED' || gameState === 'GAME_OVER')) {
+                e.preventDefault(); // 防止網頁捲動
+                initGame();
+            }
+        });
+        window.addEventListener("keyup", e => {
+            if (keys.hasOwnProperty(e.code)) keys[e.code] = false;
+        });
+
+        // 點擊按鈕觸發開始/重玩
+        startBtn.addEventListener("click", () => {
+            initGame();
+            startBtn.blur(); // 讓按鈕失去焦點，避免之後按空白鍵重複觸發按鈕
+        });
+
+        function createStair(y) {
+            return {
+                x: Math.random() * (canvas.width - stairWidth),
+                y: y,
+                width: stairWidth,
+                height: stairHeight
+            };
+        }
+
+        // 初始化/重設遊戲數值
+        function initGame() {
+            player = {
+                x: 185,
+                y: 50,
+                width: 32,
+                height: 32,
+                vx: 0,
+                vy: 0,
+                speed: 4,
+                gravity: 0.3,
+                animTimer: 0
+            };
+            
+            stairs = [];
+            for (let i = 0; i < 6; i++) {
+                stairs.push(createStair(i * 100 + 100));
+            }
+            
+            score = 0;
+            gameState = 'PLAYING';
+            startBtn.style.display = "none"; // 遊戲開始後隱藏按鈕
+        }
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            player.animTimer += 0.15;
+
+            if (keys.ArrowLeft) player.x -= player.speed;
+            if (keys.ArrowRight) player.x += player.speed;
+
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+            player.vy += player.gravity;
+            player.y += player.vy;
+
+            stairs.forEach(stair => {
+                stair.y -= 1.5;
+
+                if (
+                    player.vy > 0 &&
+                    player.x + player.width > stair.x &&
+                    player.x < stair.x + stair.width &&
+                    player.y + player.height >= stair.y &&
+                    player.y + player.height <= stair.y + stair.height + player.vy
+                ) {
+                    player.y = stair.y - player.height;
+                    player.vy = 0;
+                }
+            });
+
+            if (stairs.length > 0 && stairs[0].y < 0) {
+                stairs.shift();
+                stairs.push(createStair(canvas.height));
+                score++;
+            }
+
+            if (player.y < 0 || player.y > canvas.height) {
+                gameState = 'GAME_OVER';
+                startBtn.innerText = "重新開始遊戲";
+                startBtn.style.display = "block"; // 顯示按鈕讓玩家可以重玩
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. 畫樓梯
+            ctx.fillStyle = "#00FFCC";
+            stairs.forEach(stair => {
+                ctx.fillRect(stair.x, stair.y, stair.width, stair.height);
+            });
+
+            // 2. 畫玩家（僅在非未開始狀態下繪製）
+            if (gameState !== 'NOT_STARTED') {
+                let animOffset = Math.sin(player.animTimer) * 3; 
+                let drawHeight = player.height + animOffset;
+                let drawY = player.y - animOffset;
+
+                if (avatarImg) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(player.x + player.width / 2, drawY + drawHeight / 2, player.width / 2, 0, Math.PI * 2);
+                    ctx.clip();
+                    ctx.drawImage(avatarImg, player.x, drawY, player.width, drawHeight);
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = "#FF5733";
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = "#FF5733";
+                    ctx.fillRect(player.x, drawY, player.width, drawHeight);
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            // 3. 顯示分數
+            ctx.fillStyle = "#FFFFFF";
+            ctx.font = "16px Arial";
+            ctx.fillText("分數: " + score, 10, 25);
+
+            // 4. 根據狀態繪製畫面文字
+            if (gameState === 'NOT_STARTED') {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#00FFCC";
+                ctx.font = "24px Arial";
+                ctx.fillText("準備好了嗎？", 125, 220);
+                ctx.fillStyle = "#fff";
+                ctx.font = "16px Arial";
+                ctx.fillText("點擊上方按鈕或按下空白鍵開始", 80, 260);
+            } else if (gameState === 'GAME_OVER') {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#FF0000";
+                ctx.font = "30px Arial";
+                ctx.fillText("遊戲結束 (Game Over)", 50, 220);
+                ctx.fillStyle = "#fff";
+                ctx.font = "16px Arial";
+                ctx.fillText("點擊按鈕或按下空白鍵重新挑戰", 85, 260);
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 啟動主迴圈（一開始處於等待狀態）
+        gameLoop();
+    </script>
+</body>
+</html>
